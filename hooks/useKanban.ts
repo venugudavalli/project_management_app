@@ -1,6 +1,5 @@
 'use client';
 
-import { useLocalStorage } from './useLocalStorage';
 import { useEffect, useState, useRef } from 'react';
 import { Board, Card, Column } from '@/types/kanban';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,7 +11,7 @@ const initialBoard: Board = {
 };
 
 export function useKanban() {
-  const [board, setBoard] = useLocalStorage<Board>('kanban-board', initialBoard);
+  const [board, setBoard] = useState<Board>(initialBoard);
   const [isLoaded, setIsLoaded] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedRef = useRef<string>('');
@@ -25,11 +24,13 @@ export function useKanban() {
         if (response.ok) {
           const data = await response.json();
           if (data.columns && data.columns.length > 0) {
-            setBoard({
+            const boardData = {
               columns: data.columns,
               cards: data.cards,
               columnOrder: data.columnOrder,
-            });
+            };
+            setBoard(boardData);
+            lastSavedRef.current = JSON.stringify(data);
             setIsLoaded(true);
             return;
           }
@@ -51,12 +52,17 @@ export function useKanban() {
         columnOrder: [],
       };
       newBoard.columnOrder = newBoard.columns.map((col) => col.id);
+
+      // Set board first, then mark as loaded to trigger save effect
       setBoard(newBoard);
-      setIsLoaded(true);
+      // Schedule isLoaded to be set in next render to ensure board is set first
+      setTimeout(() => {
+        setIsLoaded(true);
+      }, 0);
     };
 
     loadBoard();
-  }, [setBoard]);
+  }, []);
 
   // Save board to database with debouncing
   useEffect(() => {
