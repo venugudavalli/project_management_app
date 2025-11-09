@@ -30,7 +30,6 @@ export function useKanban() {
               cards: data.cards,
               columnOrder: data.columnOrder,
             });
-            lastSavedRef.current = JSON.stringify(data);
             setIsLoaded(true);
             return;
           }
@@ -53,7 +52,6 @@ export function useKanban() {
       };
       newBoard.columnOrder = newBoard.columns.map((col) => col.id);
       setBoard(newBoard);
-      lastSavedRef.current = JSON.stringify(newBoard);
       setIsLoaded(true);
     };
 
