@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocalStorage } from './useLocalStorage';
+import { useEffect, useState } from 'react';
 import { Board, Card, Column } from '@/types/kanban';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -12,11 +13,32 @@ const initialBoard: Board = {
 
 export function useKanban() {
   const [board, setBoard] = useLocalStorage<Board>('kanban-board', initialBoard);
-  const [isLoaded, setIsLoaded] = useLocalStorage<boolean>('kanban-loaded', false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
-  // Initialize default columns on first load
-  const initializeBoard = () => {
-    if (!isLoaded) {
+  // Load board from database on mount
+  useEffect(() => {
+    const loadBoard = async () => {
+      try {
+        const response = await fetch('/api/board');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.columns && data.columns.length > 0) {
+            setBoard({
+              columns: data.columns,
+              cards: data.cards,
+              columnOrder: data.columnOrder,
+            });
+            setIsLoaded(true);
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load board from database, using defaults:', error);
+      }
+
+      // Initialize with default columns if database is empty
       const defaultColumns = ['To Do', 'In Progress', 'Completed'];
       const newBoard: Board = {
         columns: defaultColumns.map((title) => ({
@@ -30,6 +52,48 @@ export function useKanban() {
       };
       newBoard.columnOrder = newBoard.columns.map((col) => col.id);
       setBoard(newBoard);
+      setIsLoaded(true);
+    };
+
+    loadBoard();
+  }, []);
+
+  // Save board to database with debouncing
+  useEffect(() => {
+    if (!isLoaded || isSaving) return;
+
+    // Clear existing timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    // Set new timer
+    const timer = setTimeout(async () => {
+      try {
+        setIsSaving(true);
+        await fetch('/api/board', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(board),
+        });
+      } catch (error) {
+        console.error('Failed to save board to database:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 500);
+
+    setDebounceTimer(timer);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [board, isLoaded, isSaving, debounceTimer]);
+
+  // Initialize default columns on first load
+  const initializeBoard = () => {
+    // This function is kept for backward compatibility but is now handled in useEffect above
+    if (!isLoaded) {
       setIsLoaded(true);
     }
   };
