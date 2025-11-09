@@ -206,7 +206,6 @@ export function Board() {
           <motion.div className="opacity-90 scale-105">
             <Card
               card={draggedCard}
-              isDragging={true}
               onEdit={() => {}}
               onDelete={() => {}}
             />

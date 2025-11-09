@@ -4,19 +4,23 @@ import { motion } from 'framer-motion';
 import { Card as CardType } from '@/types/kanban';
 import { Trash2, Edit2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 
 interface CardProps {
   card: CardType;
-  isDragging?: boolean;
   onEdit: (cardId: string, title: string, notes: string) => void;
   onDelete: (cardId: string) => void;
 }
 
-export function Card({ card, isDragging = false, onEdit, onDelete }: CardProps) {
+export function Card({ card, onEdit, onDelete }: CardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(card.title);
   const [editNotes, setEditNotes] = useState(card.notes);
+
+  const { attributes, listeners, setNodeRef, transform, isDragging: isCardDragging } = useDraggable({
+    id: card.id,
+  });
 
   const handleSave = () => {
     if (editTitle.trim()) {
@@ -74,12 +78,19 @@ export function Card({ card, isDragging = false, onEdit, onDelete }: CardProps) 
 
   return (
     <motion.div
+      ref={setNodeRef}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      whileHover={{ scale: isDragging ? 1 : 1.02 }}
+      whileHover={{ scale: isCardDragging ? 1 : 1.02 }}
       whileTap={{ scale: 0.98 }}
+      style={{
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        opacity: isCardDragging ? 0.5 : 1,
+      }}
       className="bg-white dark:bg-gray-700 rounded-lg p-4 shadow-md border border-gray-200 dark:border-gray-600 hover:shadow-lg dark:hover:shadow-black/20 transition-shadow group cursor-grab active:cursor-grabbing"
+      {...attributes}
+      {...listeners}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex-1 break-words">{card.title}</h3>
