@@ -5,9 +5,36 @@ export async function GET() {
   try {
     const db = getDatabase();
 
-    const columns = db.prepare('SELECT * FROM columns').all();
-    const cards = db.prepare('SELECT * FROM cards').all();
-    const boardState = db.prepare('SELECT columnOrder FROM board').get() as { columnOrder: string } | undefined;
+    let columns = db.prepare('SELECT * FROM columns').all() as any[];
+    let cards = db.prepare('SELECT * FROM cards').all() as any[];
+    let boardState = db.prepare('SELECT columnOrder FROM board').get() as { columnOrder: string } | undefined;
+
+    // If database is empty, initialize with default columns
+    if (columns.length === 0 && cards.length === 0 && !boardState) {
+      const { v4: uuidv4 } = require('uuid');
+      const defaultColumns = ['To Do', 'In Progress', 'Completed'];
+      const now = Date.now();
+
+      const insertColumn = db.prepare('INSERT INTO columns (id, title, cardIds, createdAt) VALUES (?, ?, ?, ?)');
+      const columnIds: string[] = [];
+
+      defaultColumns.forEach((title: string) => {
+        const id = uuidv4();
+        columnIds.push(id);
+        insertColumn.run(id, title, JSON.stringify([]), now);
+      });
+
+      db.prepare('INSERT INTO board (columnOrder) VALUES (?)').run(JSON.stringify(columnIds));
+
+      columns = defaultColumns.map((title: string, index: number) => ({
+        id: columnIds[index],
+        title,
+        cardIds: [],
+        createdAt: now,
+      }));
+      boardState = { columnOrder: JSON.stringify(columnIds) };
+    }
+
     const columnOrder = boardState ? JSON.parse(boardState.columnOrder) : [];
 
     const cardsObject: Record<string, any> = {};
@@ -17,7 +44,7 @@ export async function GET() {
 
     const formattedColumns = (columns as any[]).map(col => ({
       ...col,
-      cardIds: JSON.parse(col.cardIds)
+      cardIds: col.cardIds ? (typeof col.cardIds === 'string' ? JSON.parse(col.cardIds) : col.cardIds) : []
     }));
 
     return NextResponse.json({
