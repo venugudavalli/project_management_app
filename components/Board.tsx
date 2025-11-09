@@ -68,14 +68,24 @@ export function Board() {
     const fromColumn = board.columns.find((col) => col.cardIds.includes(activeId));
     if (!fromColumn) return;
 
-    // Find the target column (can only drop on columns, not other cards)
+    // Find the target - could be a column or another card
     const toColumn = board.columns.find((col) => col.id === overId);
+    const overCard = Object.values(board.cards).find((c) => c.id === overId);
+    
+    // Determine target column
+    let toColumnId: string | undefined = toColumn?.id;
+    if (!toColumnId && overCard) {
+      // If dragging over a card, find its column
+      toColumnId = board.columns.find((col) => col.cardIds.includes(overId))?.id;
+    }
 
-    // Only allow moving to a different column
-    if (!toColumn || toColumn.id === fromColumn.id) return;
+    if (!toColumnId) return;
 
-    // Always add to the end of the target column (no reordering within columns)
-    moveCard(activeId, fromColumn.id, toColumn.id, toColumn.cardIds.length);
+    // Move to end of target column (no reordering within columns)
+    const targetColumn = board.columns.find((col) => col.id === toColumnId);
+    if (!targetColumn) return;
+
+    moveCard(activeId, fromColumn.id, toColumnId, targetColumn.cardIds.length);
   };
 
   const handleAddColumn = () => {
@@ -153,7 +163,7 @@ export function Board() {
                     type="text"
                     value={newColumnTitle}
                     onChange={(e) => setNewColumnTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm font-semibold mb-4"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-semibold mb-4 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                     placeholder="Column title"
                     autoFocus
                   />
