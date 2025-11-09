@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocalStorage } from './useLocalStorage';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Board, Card, Column } from '@/types/kanban';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,8 +14,8 @@ const initialBoard: Board = {
 export function useKanban() {
   const [board, setBoard] = useLocalStorage<Board>('kanban-board', initialBoard);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedRef = useRef<string>('');
 
   // Load board from database on mount
   useEffect(() => {
@@ -30,6 +30,7 @@ export function useKanban() {
               cards: data.cards,
               columnOrder: data.columnOrder,
             });
+            lastSavedRef.current = JSON.stringify(data);
             setIsLoaded(true);
             return;
           }
@@ -52,43 +53,52 @@ export function useKanban() {
       };
       newBoard.columnOrder = newBoard.columns.map((col) => col.id);
       setBoard(newBoard);
+      lastSavedRef.current = JSON.stringify(newBoard);
       setIsLoaded(true);
     };
 
     loadBoard();
-  }, []);
+  }, [setBoard]);
 
   // Save board to database with debouncing
   useEffect(() => {
-    if (!isLoaded || isSaving) return;
+    if (!isLoaded || board.columns.length === 0) return;
+
+    const boardString = JSON.stringify(board);
+
+    // Only save if board has actually changed
+    if (boardString === lastSavedRef.current) return;
 
     // Clear existing timer
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
 
     // Set new timer
-    const timer = setTimeout(async () => {
+    debounceTimerRef.current = setTimeout(async () => {
       try {
-        setIsSaving(true);
-        await fetch('/api/board', {
+        const response = await fetch('/api/board', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(board),
         });
+        if (response.ok) {
+          lastSavedRef.current = boardString;
+          console.log('Board saved to database');
+        } else {
+          console.error('Failed to save board:', response.status);
+        }
       } catch (error) {
         console.error('Failed to save board to database:', error);
-      } finally {
-        setIsSaving(false);
       }
     }, 500);
 
-    setDebounceTimer(timer);
-
     return () => {
-      if (timer) clearTimeout(timer);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
     };
-  }, [board, isLoaded, isSaving, debounceTimer]);
+  }, [board, isLoaded]);
 
   // Initialize default columns on first load
   const initializeBoard = () => {
