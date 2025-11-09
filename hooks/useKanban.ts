@@ -3,6 +3,7 @@
 import { useLocalStorage } from './useLocalStorage';
 import { Board, Card, Column } from '@/types/kanban';
 import { v4 as uuidv4 } from 'uuid';
+import { useEffect } from 'react';
 
 const initialBoard: Board = {
   columns: [],
@@ -12,11 +13,48 @@ const initialBoard: Board = {
 
 export function useKanban() {
   const [board, setBoard] = useLocalStorage<Board>('kanban-board', initialBoard);
-  const [isLoaded, setIsLoaded] = useLocalStorage<boolean>('kanban-loaded', false);
 
-  // Initialize default columns on first load
+  // Load from database on mount
+  useEffect(() => {
+    const loadFromDatabase = async () => {
+      try {
+        const res = await fetch('/api/board');
+        if (res.ok) {
+          const data = await res.json();
+          setBoard(data);
+        }
+      } catch (error) {
+        console.warn('Failed to load from database, using localStorage:', error);
+      }
+    };
+
+    loadFromDatabase();
+  }, [setBoard]);
+
+  // Save to database whenever board changes
+  useEffect(() => {
+    const saveToDatabase = async () => {
+      try {
+        await fetch('/api/board', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(board),
+        });
+      } catch (error) {
+        console.warn('Failed to save to database:', error);
+      }
+    };
+
+    // Only save if board has data
+    if (board.columns.length > 0) {
+      const timer = setTimeout(saveToDatabase, 500); // Debounce saves
+      return () => clearTimeout(timer);
+    }
+  }, [board]);
+
   const initializeBoard = () => {
-    if (!isLoaded) {
+    // Check if board is already initialized
+    if (board.columns.length === 0) {
       const defaultColumns = ['To Do', 'In Progress', 'Completed'];
       const newBoard: Board = {
         columns: defaultColumns.map((title) => ({
@@ -30,7 +68,6 @@ export function useKanban() {
       };
       newBoard.columnOrder = newBoard.columns.map((col) => col.id);
       setBoard(newBoard);
-      setIsLoaded(true);
     }
   };
 
