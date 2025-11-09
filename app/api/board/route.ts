@@ -9,8 +9,8 @@ export async function GET() {
     let cards = db.prepare('SELECT * FROM cards').all() as any[];
     let boardState = db.prepare('SELECT columnOrder FROM board').get() as { columnOrder: string } | undefined;
 
-    // If database is empty, initialize with default columns
-    if (columns.length === 0 && cards.length === 0 && !boardState) {
+    // If no columns exist, initialize with default columns
+    if (columns.length === 0) {
       const { v4: uuidv4 } = require('uuid');
       const defaultColumns = ['To Do', 'In Progress', 'Completed'];
       const now = Date.now();
@@ -24,6 +24,8 @@ export async function GET() {
         insertColumn.run(id, title, JSON.stringify([]), now);
       });
 
+      // Clear and reinitialize board state with column order
+      db.prepare('DELETE FROM board').run();
       db.prepare('INSERT INTO board (columnOrder) VALUES (?)').run(JSON.stringify(columnIds));
 
       columns = defaultColumns.map((title: string, index: number) => ({
